@@ -1,0 +1,28 @@
+#:kivy 1.11.1
+
+<TestLabel@Label>:
+	background_color: (0.5,0.5,0.5,1)
+	canvas.before:
+		Color:
+			rgba: root.background_color
+		RoundedRectangle:
+			size: root.size
+			pos: root.pos
+			segments: 10
+			radius: ((10.0, 10.0), (10.0, 10.0), (10.0, 10.0), (10.0, 10.0))
+
+<TestWidget>:
+	pos: self.real_pos
+	size: self.real_size
+	TestLabel:
+		pos: root.pos
+		size: root.size
+		text: root.this_text
+
+<TestLayout>:
+	pos: self.real_pos
+	size: self.real_size
+	TestLabel:
+		pos: root.pos
+		size: root.size
+		background_color: (1,1,1,1)
