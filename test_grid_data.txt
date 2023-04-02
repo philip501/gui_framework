@@ -1,0 +1,110 @@
+[
+	{
+		'child_type': <class '__main__.TestRow'>,
+		'init_data': {
+			'real_size': [3200, 200.0],
+			'data': [
+				{
+					'child_type': <class '__main__.TestCellWrapper'>,
+					'init_data': {
+						'real_size': [1600, 200.0],
+						'data': [
+							{
+								'child_type': <class '__main__.TestCell'>,
+								'init_data': {
+									'real_size': [1600, 200.0],
+									'this_text': 'This is a test.'
+								},
+								'real_pos': [1600, 200.0]
+							}
+						],
+						'content_size': [1600, 200.0]
+					},
+					'real_pos': [0, -100.0]
+				},
+				{
+					'child_type': <class '__main__.TestCellWrapper'>,
+					'init_data': {
+						'real_size': [800, 200.0],
+						'data': [
+							{
+								'child_type': <class '__main__.TestCell'>,
+								'init_data': {
+									'real_size': [800, 200.0],
+									'this_text': '1. This is a test.'
+								},
+								'real_pos': [800, 200.0]
+							}
+						],
+						'content_size': [800, 200.0]
+					},
+					'real_pos': [1600, -100.0]
+				},
+				{
+					'child_type': <class '__main__.TestCellWrapper'>,
+					'init_data': {
+						'real_size': (800, 200.0),
+						'wrapped_data': {
+							'this_text': '2. This is a test.'
+						}
+					}
+				}
+			]
+		},
+		'real_pos': [0, 100.0]
+	},
+	{
+		'child_type': <class '__main__.TestRow'>,
+		'init_data': {
+			'real_size': [3200, 200.0],
+			'data': [
+				{
+					'child_type': <class '__main__.TestCellWrapper'>,
+					'init_data': {
+						'real_size': [1600, 200.0],
+						'data': [
+							{
+								'child_type': <class '__main__.TestCell'>,
+								'init_data': {
+									'real_size': [1600, 200.0],
+									'this_text': 'This is a test.'
+								},
+								'real_pos': [1600, 200.0]
+							}
+						],
+						'content_size': [1600, 200.0]
+					},
+					'real_pos': [0, -100.0]
+				},
+				{
+					'child_type': <class '__main__.TestCellWrapper'>,
+					'init_data': {
+						'real_size': [800, 200.0],
+						'data': [
+							{
+								'child_type': <class '__main__.TestCell'>,
+								'init_data': {
+									'real_size': [800, 200.0],
+									'this_text': '1. This is a test.'
+								},
+								'real_pos': [800, 200.0]
+							}
+						],
+						'content_size': [800, 200.0]
+					},
+					'real_pos': [1600, -100.0]
+				},
+				{
+					'child_type': <class '__main__.TestCellWrapper'>,
+					'init_data': {
+						'real_size': (800, 200.0),
+						'wrapped_data': {
+							'this_text': '2. This is a test.'
+						}
+					}
+				}
+			]
+		},
+		'real_pos': [0, -100.0]
+	}
+]

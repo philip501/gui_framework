@@ -12,6 +12,11 @@ from gui_framework.utils import Touch
 import inspect
 
 
+"""
+NOTE: Base layouts cannot be used as children for nested layouts. For further information as to why, see comment in
+advanced_layouts.
+"""
+
 DEFAULT_SIZE = 10
 
 class BaseAttributes(object):
@@ -178,6 +183,7 @@ class ChildWidget(BaseWidget, BaseChild):
 	def __init__(self, data_index, **kwargs):
 		BaseWidget.__init__(self, **kwargs)
 		BaseChild.__init__(self, data_index)
+		self.is_bottom_widget = True
 
 """
 BaseLayout should not even be inherited from directly
@@ -368,7 +374,7 @@ class MoveLayout(BaseLayout):
 		for child in remove_widgets:
 			self.removeWidget(child)
 
-	def createFirstHelperWidget():
+	def createFirstHelperWidget(self):
 		# TODO: raise NeedImplementationError ?
 		return None
 
@@ -380,8 +386,10 @@ class MoveLayout(BaseLayout):
 		if not self.data:
 			return
 
-		# TODO: fehlt hier was? oder brauche ich anchor an dieser stelle gar nicht?
-		anchor = self.get_anchor()
+		"""
+		Note that for nested layouts (we want the widgets to be created and fit with respect to the anchor frame) the
+		anchor comes into play in the conditions and deltas. Therefore we dont need any anchor logic in here.
+		"""
 
 		helper_child = self.createFirstHelperWidget()
 		delta = self.delta_first(helper_child)
@@ -441,6 +449,8 @@ class MoveLayout(BaseLayout):
 
 		# fill widgets from bottom
 		last_child = self.visible[-1]
+		print(last_child)
+		print([data['child_type'] for data in self.data])
 		while self.delta_last_condition(last_child):
 			data_index = last_child.data_index + 1
 			if data_index >= len(self.data):
@@ -1124,7 +1134,7 @@ class BaseText(ZoomChild):
 	NOTE: the font_size of kv children has to be defined like int(this_font_size * resize_factor)
 	"""
 	this_text = StringProperty('')
-	this_font_size = NumericProperty('11')
+	this_font_size = NumericProperty(11)
 
 
 class FontLayout(ZoomLayout):

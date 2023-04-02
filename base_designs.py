@@ -1,5 +1,5 @@
-from gui_framework.base_layouts import BaseWidget
-from gui_framework.advanced_layouts import GridLayout, RowLayout, NestedCell
+from gui_framework.base_layouts import BaseLayout
+from gui_framework.advanced_layouts import GridLayout, RowLayout, CellWrapper
 from gui_framework.utils import Touch
 
 from time import time
@@ -15,7 +15,7 @@ IDEA:
 Use TouchWidget.onTouchDown and .onTouchUp to decide on locking any further action.
 """
 
-class BaseDesign(BaseWidget):
+class BaseDesign(BaseLayout):
 	sum_dpos = (0,0)
 	mode = None
 	layouts = []
@@ -71,6 +71,15 @@ class BaseDesign(BaseWidget):
 				self.locked = True
 		self.touched_layout = None
 
+	def addLayout(self, layout_index):
+		"""
+		so bissl wie addWidget
+
+		~> vl noch design layouts oder so wo noch das 'design' attribute hinzugefügt wird?
+		~> und dann übergibt man das mit
+		"""
+		pass
+
 
 class LogsDesign(BaseDesign):
 	pass
@@ -79,7 +88,7 @@ class LogsDesign(BaseDesign):
 # PAGES
 
 
-class Page(NestedCell):
+class Page(CellWrapper):
 	pass
 
 class PageLayout(RowLayout):

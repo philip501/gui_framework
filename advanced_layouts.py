@@ -1,6 +1,6 @@
 from kivy.properties import ListProperty, ObjectProperty, NumericProperty, BooleanProperty, StringProperty
 
-from base_layouts import (
+from gui_framework.base_layouts import (
 	BaseLayout,
 	MoveLayout,
 	VerticalLayout,
@@ -18,17 +18,27 @@ from base_layouts import (
 	ZoomMarginLayout,
 	FontMarginLayout,
 	BaseChild,
-	ChildWidget
+	ChildWidget,
+	ZoomChild,
+	BaseText
 )
-from utils import RealWidget
+from gui_framework.utils import RealWidget
 
 from typing import List
+
+
+"""
+ATTENTION !!!
+
+Base Layouts cannot be used be used as children for nested layouts because they dont inherit from base child and
+therefore cannot be assigned a data_index to. Hence, we need a wrapper for (actual) children that stops the propagation.
+"""
 
 
 # NESTED
 
 """
-This is an extension to all existing layout. Its children are layouts themselves, hence all methods need to be
+This is an extension to all existing layout. Its children are (nested!) layouts themselves, hence all methods need to be
 propagated to them.
 """
 
@@ -101,12 +111,6 @@ class NestedLayout(BaseLayout, BaseChild):
 			child_pos[0] + child_size[0] <= anchor_pos[0] + anchor_size[0] and \
 			child_pos[1] + child_size[1] <= anchor_pos[1] + anchor_size[1]
 
-	def check_nested_layout(self, data_index):
-		data_index = self.get_data_index(data_index)
-		raw_data = self.data[data_index]
-		child_type = raw_data['child_type']
-		return issubclass(child_type, NestedLayout)
-
 
 class NestedMoveLayout(NestedLayout, MoveLayout):
 	def additionalKwargs(self, data_index):
@@ -114,9 +118,7 @@ class NestedMoveLayout(NestedLayout, MoveLayout):
 		We needed to implement adding the anchor to the additional kwargs this way so that we dont get problems with the
 		hierarchy of the classes
 		"""
-		if self.check_nested_layout(data_index):
-			return {'anchor': self.get_anchor()}
-		return {}
+		return {'anchor': self.get_anchor()}
 
 	def additionalKwargsInsert(self, data_index):
 		additional_data = super(NestedMoveLayout, self).additionalKwargsInsert(data_index)
@@ -202,6 +204,9 @@ class NestedVerticalLayout(NestedMoveLayout, VerticalLayout):
 		return anchor.real_pos[1] - (penultimate_child.real_pos[1] + penultimate_child.real_size[1])
 
 	def checkDelta(self, delta_x, delta_y):
+		"""
+		We only need to check the delta at the anchor level.
+		"""
 		if self.is_anchor:
 			return super(NestedVerticalLayout, self).checkDelta(delta_x, delta_y)
 		return delta_x, delta_y
@@ -279,6 +284,154 @@ class NestedFontMarginLayout(NestedZoomMarginLayout, FontMarginLayout):
 	pass
 
 
+# WRAPPER
+
+class ChildWrapper(NestedMoveLayout):
+	"""
+	For GridLayout we need Cell to be a child and a layout. Since this causes inheritance problems (eg for which
+	__init__ gets called), we need a wrapper layout class that acts just like a child.
+	"""
+	def __init__(self, child_type: ChildWidget, *args, wrapped_data={}, **kwargs):
+		super(ChildWrapper, self).__init__(*args, **kwargs)
+		self.child_type = child_type
+		self.formatDataFromWrapped(wrapped_data)
+
+	def formatDataFromWrapped(self, wrapped_data):
+		if wrapped_data:
+			self.data = [
+				{
+					'child_type': self.child_type,
+					'init_data': wrapped_data
+				}
+			]
+
+	def create_child(self, child_type: ChildWidget, data_index, init_data):
+		return super(NestedMoveLayout, self).create_child(child_type, data_index, init_data)
+
+	def createFirstHelperWidget(self):
+		return RealWidget(self.real_pos, self.real_size)
+
+	def additionalKwargs(self, data_index):
+		return {}
+
+	def additionalKwargsInsert(self, data_index):
+		additional_data = super(ChildWrapper, self).additionalKwargsInsert(data_index)
+		additional_data['real_pos'] = self.real_pos
+		additional_data['real_size'] = self.real_size
+		return additional_data
+
+	def additionalKwargsFillFirst(self, data_index, reference_child):
+		additional_data = super(ChildWrapper, self).additionalKwargsFillFirst(data_index, reference_child)
+		additional_data['real_pos'] = self.real_pos
+		additional_data['real_size'] = self.real_size
+		return additional_data
+
+	def additionalKwargsFillLast(self, data_index, reference_child):
+		additional_data = super(ChildWrapper, self).additionalKwargsFillLast(data_index)
+		additional_data['real_pos'] = self.real_pos
+		additional_data['real_size'] = self.real_size
+		return additional_data
+
+	def reviewChildren(self):
+		super(NestedMoveLayout, self).reviewChildren()
+
+	def removeWidget(self, child_widget):
+		super(NestedMoveLayout, self).removeWidget(child_widget)
+
+	def deleteWidget(self, child_widget):
+		super(NestedMoveLayout, self).deleteWidget(child_widget)
+
+	def fillInDelta(self, delta, helper_child):
+		return self.real_pos, 0
+
+	def propagate_inspect(self, delta_x, delta_y):
+		pass
+
+	def delta_first(self, first_child):
+		return 0
+
+	def delta_last(self, last_child):
+		return 0
+
+	def delta_second(self, second_child):
+		return 0
+
+	def delta_penultimate(self, penultimate_child):
+		return 0
+
+	def updateDataFromVisible(self):
+		super(NestedLayout, self).updateDataFromVisible()
+
+
+"""
+TODO: da muss ich mir noch überlegen, wie ich resize_factor, this_font_size, this_text usw propagaten will, falls
+notwendig. Wenn ich das zb immer bei additionalKwargs* übergeben und bei to_data speichern möchte, dann muss ich mir
+noch was bei wrapped data überlegen. oder einfach dann td noch data anlegen?
+"""
+
+class ZoomChildWrapper(ChildWrapper):
+	def __init__(self, child_type: ZoomChild, *args, resize_factor=1, **kwargs):
+		super(ZoomChildWrapper, self).__init__(child_type, *args, **kwargs)
+		self.resize_factor = resize_factor
+
+	def create_child(self, child_type: ZoomChild, data_index, init_data):
+		return super(ZoomChildWrapper, self).create_child(child_type, data_index, init_data)
+
+	def additionalKwargsInsert(self, data_index):
+		additional_data = super(ZoomChildWrapper, self).additionalKwargsInsert(data_index)
+		#additional_data['resize_factor'] = self.resize_factor
+		return additional_data
+
+	def additionalKwargsFillFirst(self, data_index, reference_child):
+		additional_data = super(ZoomChildWrapper, self).additionalKwargsFillFirst(data_index, reference_child)
+		#additional_data['resize_factor'] = self.resize_factor
+		return additional_data
+
+	def additionalKwargsFillLast(self, data_index, reference_child):
+		additional_data = super(ZoomChildWrapper, self).additionalKwargsFillLast(data_index, reference_child)
+		#additional_data['resize_factor'] = self.resize_factor
+		return additional_data
+
+	def to_data(self) -> dict:
+		data = super(ZoomChildWrapper, self).to_data()
+		#data['init_data']['resize_factor'] = self.resize_factor
+		return data
+
+
+class BaseTextWrapper(ZoomChildWrapper):
+	def __init__(self, child_type: BaseText, *args, this_text='', this_font_size=11, **kwargs):
+		super(BaseTextWrapper, self).__init__(child_type, *args, **kwargs)
+		self.this_text = this_text
+		self.this_font_size = this_font_size
+
+	def create_child(self, child_type: BaseText, data_index, init_data):
+		return super(BaseTextWrapper, self).create_child(child_type, data_index, init_data)
+
+	def additionalKwargsInsert(self, data_index):
+		additional_data = super(BaseTextWrapper, self).additionalKwargsInsert(data_index)
+		#additional_data['this_text'] = self.this_text
+		#additional_data['this_font_size'] = self.this_font_size
+		return additional_data
+
+	def additionalKwargsFillFirst(self, data_index, reference_child):
+		additional_data = super(BaseTextWrapper, self).additionalKwargsFillFirst(data_index, reference_child)
+		#additional_data['this_text'] = self.this_text
+		#additional_data['this_font_size'] = self.this_font_size
+		return additional_data
+
+	def additionalKwargsFillLast(self, data_index, reference_child):
+		additional_data = super(BaseTextWrapper, self).additionalKwargsFillLast(data_index, reference_child)
+		#additional_data['this_text'] = self.this_text
+		#additional_data['this_font_size'] = self.this_font_size
+		return additional_data
+
+	def to_data(self) -> dict:
+		data = super(BaseTextWrapper, self).to_data()
+		#data['init_data']['this_text'] = self.this_text
+		#data['init_data']['this_font_size'] = self.this_font_size
+		return data
+
+
 # GRID
 
 """
@@ -337,7 +490,7 @@ one.
 """
 
 
-class BaseCell(ChildWidget):
+class Cell(ChildWidget):
 	"""
 	Within RowLayout we want to propagate any changes of its real_size to its children. When deleting a child (and its
 	data) we want possibly adjust all cells heights to the new max height. Since real_size is not suitable for this
@@ -346,14 +499,6 @@ class BaseCell(ChildWidget):
 	NOTE: (Usually) Do NOT update the cells real_pos at any point from within any cells method. This will be done on row
 	level.
 	"""
-	content_size = ListProperty((0,0))
-	def __init__(self, *args, content_size=None, **kwargs):
-		super(BaseCell, self).__init__(*args, **kwargs)
-		if content_size is None:
-			self.content_size = kwargs.get('real_size', (0,0))
-		else:
-			self.content_size = content_size
-
 	def get_data_index(self):
 		return [self.parent.data_index, self.data_index]
 
@@ -366,39 +511,23 @@ class BaseCell(ChildWidget):
 
 		NOTE: You will probably not need to handle the case where content_size exceeds real_size, simply call the super
 		method at the end of your implementation.
+
+		TODO:
+		This should be handled in the wrapper.
 		"""
 		if self.content_size[0] > self.real_size[0]:
 			self.real_size[0] = self.content_size[0]
 		if self.content_size[1] > self.real_size[1]:
 			self.real_size[1] = self.content_size[1]
 
-	def to_data(self) -> dict:
-		data = super(BaseCell, self).to_data()
-		data['init_data']['content_size'] = self.content_size
-		return data
 
-
-class Cell(BaseCell, MoveLayout):
+class CellWrapper(ChildWrapper):
 	"""
 	Since RowLayout is a nested layout, its children (cells that is) need to be a layout themselves.
 
-	This causes some problems with wrong behaviours. One of them is that we do not want / need any data for ChildWidget
-	initialisation (it cannot handle passed 'data'), hence we need remove it from 'init_data'.
-	"""
-	def to_data(self) -> dict:
-		data = super(Cell, self).to_data()
-		del data['init_data']['data']
-		return data
+	NOTE: Empty cells are allowed. Handling their onTouch* needs to be managed on implementation.
 
-
-class NestedCell(Cell, NestedMoveLayout):
-	"""
-	For the possibility of aligning the cells content, we need some sort of nested logic and some blocking of
-	propagating the real_size to the content. NestedCell will take the real_size and leave its child size untouched (the
-	content_size that is).
-
-	NOTE: This class only serves the wrapping purpose of the described logic above and will therefore ONLY take one
-	child.
+	This needed wrapping logic already fulfills a nested version of cell. Hence we can do alignment and alike here.
 
 	valign: vertical alignment of the content; possible values:
 		TOP
@@ -411,13 +540,23 @@ class NestedCell(Cell, NestedMoveLayout):
 
 	By default the content alignment will be TOP-LEFT.
 	"""
-	halign = 'LEFT'
-	valign = 'TOP'
-	def updateSize(self, real_size):
-		super(NestedCell, self).updateSize(real_size)
+	content_size = (0,0)
+	valign = 'LEFT'
+	halign = 'TOP'
+	def __init__(self, child_type: Cell, *args, content_size=None, valign='LEFT', halign='TOP', **kwargs):
+		super(CellWrapper, self).__init__(child_type, *args, **kwargs)
+		self.valign = valign
+		self.halign = halign
+		if content_size is None:
+			self.content_size = self.real_size
+		else:
+			self.content_size = content_size
 		self.align_content()
 
 	def align_content(self):
+		if not self.visible:
+			return
+
 		delta_width = self.real_size[0] - self.content_size[0]
 		delta_height = self.real_size[1] - self.content_size[1]
 		real_pos = [self.real_pos[0], self.real_pos[1]]
@@ -432,14 +571,42 @@ class NestedCell(Cell, NestedMoveLayout):
 		elif self.halign == 'CENTER':
 			real_pos[0] += delta_width / 2
 
-		self.visible[0].setPos(real_pos)
+		cell.setPos(real_pos)
 
 	def updateData(self, data):
-		super(NestedCell, self).updateData(data)
-		self.align_content()
+		if self.visible:
+			self.visible[0].updateData()
+			self.align_content()
+
+	def to_data(self) -> dict:
+		data = super(CellWrapper, self).to_data()
+		data['init_data']['content_size'] = self.content_size
+		data['init_data']['valign'] = self.valign
+		data['init_data']['halign'] = self.halign
+		return data
+
+	def additionalKwargsInsert(self, data_index):
+		additional_data = super(CellWrapper, self).additionalKwargsInsert(data_index)
+		additional_data['real_size'] = self.content_size
+		return additional_data
+
+	def additionalKwargsFillFirst(self, data_index, reference_child):
+		additional_data = super(CellWrapper, self).additionalKwargsFillFirst(data_index, reference_child)
+		additional_data['real_size'] = self.content_size
+		return additional_data
+
+	def additionalKwargsFillLast(self, data_index, reference_child):
+		additional_data = super(CellWrapper, self).additionalKwargsFillLast(data_index, reference_child)
+		additional_data['real_size'] = self.content_size
+		return additional_data
+
+	
 
 
 class RowLayout(NestedHorizontalLayout):
+	"""
+	NOTE: Empty cells are allowed. Handling their onTouch* needs to be managed on implementation.
+	"""
 	col_widths: List = []
 	def __init__(self, *args, col_widths=[], **kwargs):
 		super(RowLayout, self).__init__(*args, **kwargs)
@@ -455,12 +622,6 @@ class RowLayout(NestedHorizontalLayout):
 
 	def deleteWidget(self, data_index):
 		super(RowLayout, self).deleteWidget(data_index)
-		"""
-		TODO: how do i determine the remaining childrens original height? Their real_size is probably already adjusted
-		to the rows height.
-
-		~> maybe i need to store them explicitly? and update those in updateCell as well
-		"""
 		self.recalculate_max_child_height()
 
 	def recalculate_max_child_height(self):
@@ -478,7 +639,7 @@ class RowLayout(NestedHorizontalLayout):
 
 	def createFirstHelperWidget(self):
 		real_pos = self.real_pos
-		real_size = [self.real_size[0], self.col_widths[0]]
+		real_size = [self.col_widths[0], self.real_size[1]]
 		helper_widget = RealWidget(real_pos, real_size)
 		return helper_widget
 
@@ -504,10 +665,8 @@ class RowLayout(NestedHorizontalLayout):
 		return additional_data
 
 	def insertNewAndReposition(self, data_index, new_data, child_type: ChildWidget):
-		# insert col_width from child_type / new_data
-		real_size = child_type.real_size
-		if 'real_size' in new_data:
-			real_size = new_data['real_size']
+		# NOTE: real_size has to be set in init_data
+		real_size = new_data['real_size']
 		self.col_widths.insert(self.get_data_index(data_index), real_size[0])
 
 		if real_size[1] > self.real_size[1]:
@@ -595,7 +754,7 @@ class GridLayout(NestedVerticalLayout):
 	def removeData(self, data_index):
 		super(GridLayout, self).removeData(data_index)
 
-	def insertCell(self, data_index, new_data, child_type: BaseCell):
+	def insertCell(self, data_index, new_data, child_type: CellWrapper):
 		"""
 		NOTE: reposition of children has to be done "manually" by calling the corresponding method after insertCell
 		"""
@@ -637,7 +796,7 @@ class GridLayout(NestedVerticalLayout):
 		additional_data['col_widths'] = self.col_widths
 		return additional_data
 
-	def insertCellAndReposition(self, data_index, new_data, child_type: BaseCell):
+	def insertCellAndReposition(self, data_index, new_data, child_type: CellWrapper):
 		"""
 		This method inserts a cell into an existing row. All other rows will be inserted an empty cell at the same
 		position.

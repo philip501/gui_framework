@@ -1,6 +1,6 @@
 from gui_framework.base_designs import BaseDesign
 from gui_framework.base_layouts import VerticalLayout, ChildWidget
-from gui_framework.advanced_layouts import GridLayout, RowLayout, Cell
+from gui_framework.advanced_layouts import GridLayout, RowLayout, Cell, CellWrapper
 
 from kivy.app import App
 from kivy.core.window import Window
@@ -11,12 +11,6 @@ from kivy.properties import ListProperty, ObjectProperty, NumericProperty, Boole
 
 class TestWidget(ChildWidget):
 	this_text = StringProperty('')
-	real_size = ListProperty((Window.width, Window.height / 3))
-	def __init__(self, *args, **kwargs):
-		print("args: ", args)
-		print("kwargs: ", kwargs)
-		super(TestWidget, self).__init__(*args, **kwargs)
-		self.is_bottom_widget = True
 
 	def updatePos(self, delta):
 		super(TestWidget, self).updatePos(delta)
@@ -83,10 +77,28 @@ class TestDesign(BaseDesign):
 # testing grid
 
 class TestCell(TestWidget, Cell):
-	pass
+	def to_data(self) -> dict:
+		test_data = TestWidget.to_data(self)
+		cell_data = Cell.to_data(self)
+		test_data['init_data'].update(cell_data['init_data'])
+		test_data['real_pos'] = self.real_pos
+		return test_data
+
+class TestCellWrapper(CellWrapper):
+	def __init__(self, *args, **kwargs):
+		super(TestCellWrapper, self).__init__(TestCell, *args, **kwargs)
+
+	def to_data(self):
+		data = super(TestCellWrapper, self).to_data()
+		data['real_pos'] = self.real_pos
+		return data
+
 
 class TestRow(RowLayout):
-	pass
+	def to_data(self):
+		data = super(TestRow, self).to_data()
+		data['real_pos'] = self.real_pos
+		return data
 
 class TestGrid(GridLayout):
 	pass
@@ -101,7 +113,7 @@ class GridDesign(BaseDesign):
 			col_widths=[Window.width * 2, Window.width, Window.width],
 			row_heights=[Window.height / 3],
 			real_pos=(0,0),
-			real_size=(Window.width, Window.height / 2)
+			real_size=(Window.width, Window.height / 3)
 		)
 		self.layouts.append(layout)
 		self.add_widget(layout)
@@ -109,24 +121,30 @@ class GridDesign(BaseDesign):
 		# add data and widgets to layout
 		row_data = [
 			{
-				'child_type': TestCell,
+				'child_type': TestCellWrapper,
 				'init_data': {
-					'this_text': 'This is a test.',
-					'real_size': (Window.width * 2, Window.height / 3)
+					'real_size': (Window.width * 2, Window.height / 3),
+					'wrapped_data': {
+						'this_text': 'This is a test.',
+					}
 				}
 			},
 			{
-				'child_type': TestCell,
+				'child_type': TestCellWrapper,
 				'init_data': {
-					'this_text': '1. This is a test.',
-					'real_size': (Window.width, Window.height / 3)
+					'real_size': (Window.width, Window.height / 3),
+					'wrapped_data': {
+						'this_text': '1. This is a test.',
+					}
 				}
 			},
 			{
-				'child_type': TestCell,
+				'child_type': TestCellWrapper,
 				'init_data': {
-					'this_text': '2. This is a test.',
-					'real_size': (Window.width, Window.height / 3)
+					'real_size': (Window.width, Window.height / 3),
+					'wrapped_data': {
+						'this_text': '2. This is a test.',
+					}
 				}
 			},
 		]
@@ -150,8 +168,11 @@ class GridDesign(BaseDesign):
 		layout.data = data
 		layout.fillInChildren()
 
-		print(layout.visible)
-		print(layout.visible[0].visible)
+		#print(layout.visible)
+		#print(layout.visible[0].visible[0].to_data())
+
+		layout.updateDataFromVisible()
+		#print(layout.data)
 
 
 
