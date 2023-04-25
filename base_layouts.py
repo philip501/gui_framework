@@ -7,7 +7,7 @@ from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.textinput import TextInput
 from kivy.properties import ListProperty, ObjectProperty, NumericProperty, BooleanProperty, StringProperty
 
-from gui_framework.utils import Touch
+from gui_framework.utils import Touch, RealWidget
 
 import inspect
 
@@ -45,8 +45,11 @@ class BaseWidget(Widget, BaseAttributes):
 		self.real_size = real_size
 
 	def setPos(self, real_pos):
+		"""
 		delta = [real_pos[0] - self.real_pos[0], real_pos[1] - self.real_pos[1]]
 		self.updatePos(delta)
+		"""
+		self.real_pos = real_pos
 
 	def to_data(self) -> dict:
 		"""
@@ -72,7 +75,7 @@ class TouchWidget(BaseWidget):
 	the hierarchy. We therefore do not implement onTouchDown and onTouchUp beyond returning False.
 	"""
 	def collideWidget(self, x, y):
-		if self.x < x < self.x + self.real_size[0] and self.y < y < self.y + self.real_size[1]:
+		if self.real_pos[0] < x < self.real_pos[0] + self.real_size[0] and self.real_pos[1] < y < self.real_pos[1] + self.real_size[1]:
 			return True
 		return False
 
@@ -85,6 +88,16 @@ class TouchWidget(BaseWidget):
 		remembers the touched widget and calls .onTouchUp for this widget.
 		"""
 		return False
+
+	def onTouchDownAnimation(self, touch):
+		pass
+
+	def onTouchUpAnimation(self, touch):
+		pass
+
+	def clearTouch(self, touch):
+		pass
+
 
 # BASE
 
@@ -179,9 +192,9 @@ class BaseChild(object):
 	def decrementIndex(self):
 		self.data_index -= 1
 
-class ChildWidget(BaseWidget, BaseChild):
+class ChildWidget(TouchWidget, BaseChild):
 	def __init__(self, data_index, **kwargs):
-		BaseWidget.__init__(self, **kwargs)
+		TouchWidget.__init__(self, **kwargs)
 		BaseChild.__init__(self, data_index)
 		self.is_bottom_widget = True
 
@@ -222,9 +235,15 @@ class BaseLayout(TouchWidget):
 		self.data.pop(self.get_data_index(data_index))
 
 	def get_data_index(self, data_index):
+		# TODO: what was the idea behind d_index? kept it as comment if i might need it
 		if data_index < 0:
+			"""
 			d_index = data_index + len(self.data)
 			if d_index < 0:
+				data_index = 0
+			"""
+			data_index += len(self.data)
+			if data_index < 0:
 				data_index = 0
 		elif data_index > len(self.data):
 			data_index = len(self.data)
@@ -449,8 +468,6 @@ class MoveLayout(BaseLayout):
 
 		# fill widgets from bottom
 		last_child = self.visible[-1]
-		print(last_child)
-		print([data['child_type'] for data in self.data])
 		while self.delta_last_condition(last_child):
 			data_index = last_child.data_index + 1
 			if data_index >= len(self.data):
@@ -572,19 +589,26 @@ class MoveLayout(BaseLayout):
 		If last_child is out of sight, then remove it.
 		"""
 		last_child = self.visible[-1]
-		if self.condition_last(last_child, delta):
+		while self.condition_last(last_child, delta):
 			self.removeWidget(last_child)
+			if self.visible:
+				last_child = self.visible[-1]
+			else:
+				break
 
 	def inspectSecond(self, delta):
 		"""
 		If first_child is in sight, add the previous from data
 		"""
 		first_child = self.visible[0]
-		if not self.condition_second(first_child, delta):
+		while not self.condition_second(first_child, delta):
 			if first_child.data_index > 0:
 				first_index = first_child.data_index - 1
 				additional_data = self.additionalKwargsFillFirst(first_index, first_child)
 				self.addWidget(first_index, additional_data)
+				first_child = self.visible[0]
+			else:
+				break
 
 	def inspectLastSecond(self, delta):
 		"""
@@ -598,19 +622,26 @@ class MoveLayout(BaseLayout):
 		if first_child is out of sight, then remove it
 		"""
 		first_child = self.visible[0]
-		if self.condition_first(first_child, delta):
+		while self.condition_first(first_child, delta):
 			self.removeWidget(first_child)
+			if self.visible:
+				first_child = self.visible[0]
+			else:
+				break
 
 	def inspectPenultimate(self, delta):
 		"""
 		if last_child is in sight, add the next from data
 		"""
 		last_child = self.visible[-1]
-		if not self.condition_penultimate(last_child, delta):
+		while not self.condition_penultimate(last_child, delta):
 			if last_child.data_index + 1 < len(self.data):
 				last_index = last_child.data_index + 1
 				additional_data = self.additionalKwargsFillLast(last_index, last_child)
 				self.addWidget(last_index, additional_data)
+				last_child = self.visible[-1]
+			else:
+				break
 
 	def inspectFirstPenultimate(self, delta):
 		"""
@@ -639,16 +670,6 @@ class MoveLayout(BaseLayout):
 		pass
 
 	def move(self, touch):
-		# TODO
-		"""
-		The logic does not seem to be right at the moment. I think we need to introduce an option in condition_second
-		and condition_penultimate to differentiate between '>' and '<' and use those for deciding whether to add a
-		widget or not. The current way of doing that (those 'else' clauses) needs to be restructured.
-
-		=> no need for such an option, simple use 'not' condition.
-
-		~> definitely needs to be tested!!!
-		"""
 		if not self.visible:
 			return
 
@@ -712,7 +733,11 @@ class VerticalLayout(MoveLayout):
 
 	def createFirstHelperWidget(self):
 		first_child_raw = self.data[0]
-		real_size = first_child_raw['init_data']['real_size']
+		if 'real_size' in first_child_raw['init_data']:
+			real_size = first_child_raw['init_data']['real_size']
+		else:
+			additional_data = self.additionalKwargsInsert(0)
+			real_size = additional_data['real_size']
 		real_pos = (self.real_pos[0], self.real_pos[1] + self.real_size[1] - real_size[1])
 
 		helper_widget = RealWidget(real_pos, real_size)
@@ -976,12 +1001,12 @@ class HorizontalLayout(MoveLayout):
 		if delta_x < 0:
 			delta = self.check_delta_right(last_child)
 			if delta_x < delta:
-				if last_child.data_index == 0:
+				if last_child.data_index + 1 == len(self.data):
 					delta_x = delta
 		if delta_x > 0:
 			delta = self.check_delta_left(first_child)
 			if delta_x > delta:
-				if first_child.data_index + 1 == len(self.data):
+				if first_child.data_index == 0:
 					delta_x = delta
 
 		return delta_x, delta_y
@@ -1135,6 +1160,11 @@ class BaseText(ZoomChild):
 	"""
 	this_text = StringProperty('')
 	this_font_size = NumericProperty(11)
+	def to_data(self) -> dict:
+		data = super(BaseText, self).to_data()
+		data['init_data']['this_text'] = self.this_text
+		data['init_data']['this_font_size'] = self.this_font_size
+		return data
 
 
 class FontLayout(ZoomLayout):

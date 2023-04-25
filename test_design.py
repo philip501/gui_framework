@@ -86,7 +86,7 @@ class TestCell(TestWidget, Cell):
 
 class TestCellWrapper(CellWrapper):
 	def __init__(self, *args, **kwargs):
-		super(TestCellWrapper, self).__init__(TestCell, *args, **kwargs)
+		super(TestCellWrapper, self).__init__(child_type=TestCell, *args, **kwargs)
 
 	def to_data(self):
 		data = super(TestCellWrapper, self).to_data()
@@ -111,7 +111,7 @@ class GridDesign(BaseDesign):
 		# create layout
 		layout = TestGrid(
 			col_widths=[Window.width * 2, Window.width, Window.width],
-			row_heights=[Window.height / 3],
+			row_heights=[Window.height / 3, Window.height / 3],
 			real_pos=(0,0),
 			real_size=(Window.width, Window.height / 3)
 		)

@@ -43,6 +43,7 @@ class BaseDesign(BaseLayout):
 		self.time_down = t
 		self.sum_dpos = (0,0)
 		self.is_moving = False
+		self.locked = False
 		if self.touched_layout:
 			if self.touched_layout.onTouchDown(touch):
 				self.locked = True
@@ -66,10 +67,16 @@ class BaseDesign(BaseLayout):
 				self.touched_layout.move(touch)
 
 	def on_touch_up(self, touch, *args):
-		if self.touched_layout:
-			if self.touched_layout.onTouchUp(touch):
-				self.locked = True
+		return_from_touch = None
+		if self.mode is None:
+			if self.touched_layout:
+				return_from_touch = self.touched_layout.onTouchUp(touch)
+				if return_from_touch:
+					self.locked = True
+		else:
+			self.touched_layout.clearTouch(touch)
 		self.touched_layout = None
+		return return_from_touch
 
 	def addLayout(self, layout_index):
 		"""

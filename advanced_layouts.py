@@ -25,6 +25,7 @@ from gui_framework.base_layouts import (
 from gui_framework.utils import RealWidget
 
 from typing import List
+from copy import deepcopy
 
 
 """
@@ -126,6 +127,7 @@ class NestedMoveLayout(NestedLayout, MoveLayout):
 		return additional_data
 
 	def create_child(self, child_type, data_index, init_data):
+		#print(data_index)
 		new_child = child_type(data_index, **init_data)
 		new_child.fillInFromScratch()
 		return new_child
@@ -207,7 +209,7 @@ class NestedVerticalLayout(NestedMoveLayout, VerticalLayout):
 		"""
 		We only need to check the delta at the anchor level.
 		"""
-		if self.is_anchor:
+		if self.is_anchor():
 			return super(NestedVerticalLayout, self).checkDelta(delta_x, delta_y)
 		return delta_x, delta_y
 
@@ -234,7 +236,7 @@ class NestedHorizontalLayout(NestedMoveLayout, HorizontalLayout):
 		return (anchor.real_pos[0] + anchor.real_size[0]) - penultimate_child.real_pos[0]
 
 	def checkDelta(self, delta_x, delta_y):
-		if self.is_anchor:
+		if self.is_anchor():
 			return super(NestedHorizontalLayout, self).checkDelta(delta_x, delta_y)
 		return delta_x, delta_y
 
@@ -291,10 +293,15 @@ class ChildWrapper(NestedMoveLayout):
 	For GridLayout we need Cell to be a child and a layout. Since this causes inheritance problems (eg for which
 	__init__ gets called), we need a wrapper layout class that acts just like a child.
 	"""
-	def __init__(self, child_type: ChildWidget, *args, wrapped_data={}, **kwargs):
+	def __init__(self, *args, child_type: ChildWidget = ChildWidget, wrapped_data={}, **kwargs):
 		super(ChildWrapper, self).__init__(*args, **kwargs)
 		self.child_type = child_type
 		self.formatDataFromWrapped(wrapped_data)
+
+	def updateSize(self, real_size):
+		super(ChildWrapper, self).updateSize(real_size)
+		for child in self.visible:
+			child.updateSize(real_size)
 
 	def formatDataFromWrapped(self, wrapped_data):
 		if wrapped_data:
@@ -362,6 +369,14 @@ class ChildWrapper(NestedMoveLayout):
 	def updateDataFromVisible(self):
 		super(NestedLayout, self).updateDataFromVisible()
 
+	def onTouchDownAnimation(self, touch):
+		if self.visible:
+			self.visible[0].onTouchDownAnimation(touch)
+
+	def onTouchUpAnimation(self, touch):
+		if self.visible:
+			self.visible[0].onTouchUpAnimation(touch)
+
 
 """
 TODO: da muss ich mir noch überlegen, wie ich resize_factor, this_font_size, this_text usw propagaten will, falls
@@ -370,8 +385,8 @@ noch was bei wrapped data überlegen. oder einfach dann td noch data anlegen?
 """
 
 class ZoomChildWrapper(ChildWrapper):
-	def __init__(self, child_type: ZoomChild, *args, resize_factor=1, **kwargs):
-		super(ZoomChildWrapper, self).__init__(child_type, *args, **kwargs)
+	def __init__(self, *args, child_type: ZoomChild = ZoomChild, resize_factor=1, **kwargs):
+		super(ZoomChildWrapper, self).__init__(*args, child_type=child_type, **kwargs)
 		self.resize_factor = resize_factor
 
 	def create_child(self, child_type: ZoomChild, data_index, init_data):
@@ -379,17 +394,17 @@ class ZoomChildWrapper(ChildWrapper):
 
 	def additionalKwargsInsert(self, data_index):
 		additional_data = super(ZoomChildWrapper, self).additionalKwargsInsert(data_index)
-		#additional_data['resize_factor'] = self.resize_factor
+		additional_data['resize_factor'] = self.resize_factor
 		return additional_data
 
 	def additionalKwargsFillFirst(self, data_index, reference_child):
 		additional_data = super(ZoomChildWrapper, self).additionalKwargsFillFirst(data_index, reference_child)
-		#additional_data['resize_factor'] = self.resize_factor
+		additional_data['resize_factor'] = self.resize_factor
 		return additional_data
 
 	def additionalKwargsFillLast(self, data_index, reference_child):
 		additional_data = super(ZoomChildWrapper, self).additionalKwargsFillLast(data_index, reference_child)
-		#additional_data['resize_factor'] = self.resize_factor
+		additional_data['resize_factor'] = self.resize_factor
 		return additional_data
 
 	def to_data(self) -> dict:
@@ -397,10 +412,13 @@ class ZoomChildWrapper(ChildWrapper):
 		#data['init_data']['resize_factor'] = self.resize_factor
 		return data
 
+	def updateResize(self, resize_factor):
+		if self.visible:
+			self.visible[0].resize_factor = resize_factor
 
 class BaseTextWrapper(ZoomChildWrapper):
-	def __init__(self, child_type: BaseText, *args, this_text='', this_font_size=11, **kwargs):
-		super(BaseTextWrapper, self).__init__(child_type, *args, **kwargs)
+	def __init__(self, *args, child_type: BaseText = BaseText, this_text='', this_font_size=11, **kwargs):
+		super(BaseTextWrapper, self).__init__(*args, child_type=child_type, **kwargs)
 		self.this_text = this_text
 		self.this_font_size = this_font_size
 
@@ -410,19 +428,19 @@ class BaseTextWrapper(ZoomChildWrapper):
 	def additionalKwargsInsert(self, data_index):
 		additional_data = super(BaseTextWrapper, self).additionalKwargsInsert(data_index)
 		#additional_data['this_text'] = self.this_text
-		#additional_data['this_font_size'] = self.this_font_size
+		additional_data['this_font_size'] = self.this_font_size
 		return additional_data
 
 	def additionalKwargsFillFirst(self, data_index, reference_child):
 		additional_data = super(BaseTextWrapper, self).additionalKwargsFillFirst(data_index, reference_child)
 		#additional_data['this_text'] = self.this_text
-		#additional_data['this_font_size'] = self.this_font_size
+		additional_data['this_font_size'] = self.this_font_size
 		return additional_data
 
 	def additionalKwargsFillLast(self, data_index, reference_child):
 		additional_data = super(BaseTextWrapper, self).additionalKwargsFillLast(data_index, reference_child)
 		#additional_data['this_text'] = self.this_text
-		#additional_data['this_font_size'] = self.this_font_size
+		additional_data['this_font_size'] = self.this_font_size
 		return additional_data
 
 	def to_data(self) -> dict:
@@ -430,6 +448,14 @@ class BaseTextWrapper(ZoomChildWrapper):
 		#data['init_data']['this_text'] = self.this_text
 		#data['init_data']['this_font_size'] = self.this_font_size
 		return data
+
+	def updateText(self, text):
+		if self.visible:
+			self.visible[0].this_text = text
+
+	def updateFontSize(self, font_size):
+		if self.visible:
+			self.visible[0].this_font_size = font_size
 
 
 # GRID
@@ -467,6 +493,8 @@ we also need to change the BaseChild methods for this purpose (see NOTES).
 0.0.1 change of mind, rows will be organized as rows, this makes everything easier.
 
 0.1.0 introducing content_size for BaseCell
+
+0.2.0 Cell is now a BaseText to avoid / resolve any inheritance problems when implementing a cell with text.
 """
 
 """
@@ -489,8 +517,16 @@ provided, we still want to keep the possibility of cells being empty.
 one.
 """
 
+"""
+IDEAS:
 
-class Cell(ChildWidget):
+'real_size' needs to be present from the start (of initialization). Since this can depend on the layout itself, maybe we
+want to add it on additionalKwargs*? From grid to row, from row to cell - via col_widhts and row_heights.
+(note: this is already implemented for row to cell)
+"""
+
+
+class Cell(BaseText):
 	"""
 	Within RowLayout we want to propagate any changes of its real_size to its children. When deleting a child (and its
 	data) we want possibly adjust all cells heights to the new max height. Since real_size is not suitable for this
@@ -520,8 +556,7 @@ class Cell(ChildWidget):
 		if self.content_size[1] > self.real_size[1]:
 			self.real_size[1] = self.content_size[1]
 
-
-class CellWrapper(ChildWrapper):
+class CellWrapper(BaseTextWrapper):
 	"""
 	Since RowLayout is a nested layout, its children (cells that is) need to be a layout themselves.
 
@@ -543,8 +578,8 @@ class CellWrapper(ChildWrapper):
 	content_size = (0,0)
 	valign = 'LEFT'
 	halign = 'TOP'
-	def __init__(self, child_type: Cell, *args, content_size=None, valign='LEFT', halign='TOP', **kwargs):
-		super(CellWrapper, self).__init__(child_type, *args, **kwargs)
+	def __init__(self, *args, child_type: Cell = Cell, content_size=None, valign='LEFT', halign='TOP', **kwargs):
+		super(CellWrapper, self).__init__(*args, child_type=child_type, **kwargs)
 		self.valign = valign
 		self.halign = halign
 		if content_size is None:
@@ -552,6 +587,21 @@ class CellWrapper(ChildWrapper):
 		else:
 			self.content_size = content_size
 		self.align_content()
+		self.override_content_size = False
+
+	def updateSize(self, real_size):
+		super(ChildWrapper, self).updateSize(real_size)
+
+		if self.override_content_size:
+			self.content_size = self.real_size
+		else:
+			self.content_size = [
+				min(self.real_size[0], self.content_size[0]),
+				min(self.real_size[1], self.content_size[1])
+			]
+		self.override_content_size = False
+		for child in self.visible:
+			child.updateSize(self.content_size)
 
 	def align_content(self):
 		if not self.visible:
@@ -571,7 +621,11 @@ class CellWrapper(ChildWrapper):
 		elif self.halign == 'CENTER':
 			real_pos[0] += delta_width / 2
 
-		cell.setPos(real_pos)
+		self.visible[0].setPos(real_pos)
+
+	def addWidget(self, data_index, additional_data):
+		super(CellWrapper, self).addWidget(data_index, additional_data)
+		self.align_content()
 
 	def updateData(self, data):
 		if self.visible:
@@ -600,8 +654,6 @@ class CellWrapper(ChildWrapper):
 		additional_data['real_size'] = self.content_size
 		return additional_data
 
-	
-
 
 class RowLayout(NestedHorizontalLayout):
 	"""
@@ -610,10 +662,9 @@ class RowLayout(NestedHorizontalLayout):
 	col_widths: List = []
 	def __init__(self, *args, col_widths=[], **kwargs):
 		super(RowLayout, self).__init__(*args, **kwargs)
-		self.col_widths = col_widths
+		self.col_widths = deepcopy(col_widths)
 		if not self.data:
 			self.data = [{} for i in range(len(self.col_widths))]
-		self.real_size = [sum(col_widths), self.real_size[1]]
 
 	def is_empty(self):
 		if [True for d in self.data if d]:
@@ -643,25 +694,48 @@ class RowLayout(NestedHorizontalLayout):
 		helper_widget = RealWidget(real_pos, real_size)
 		return helper_widget
 
+	def _add_real_size_for_kwargs(self, data_index):
+		"""
+		NOTE: This method is ONLY for internal purpose. Do NOT use this method at any time!
+
+		Due to the internal logic that 'real_size' needs to be set from the very start for all additionalKwargs* methods
+		and the implementation choice to set the real size on instantiation level from grid to row and from row to cell,
+		we need to do so before calling the additionalKwargs* super methods. Since this is the same for all of them, we
+		extracted this logic to this separate method.
+		"""
+		real_size = [self.col_widths[data_index], self.real_size[1]]
+
+		data_index = self.get_data_index(data_index)
+		raw_data = self.data[data_index]
+		raw_data['init_data']['real_size'] = real_size
+
+		return real_size
+
 	def additionalKwargsInsert(self, data_index):
+		real_size = self._add_real_size_for_kwargs(data_index)
+
 		additional_data = super(RowLayout, self).additionalKwargsInsert(data_index)
 
 		data_index = self.get_data_index(data_index)
-		additional_data['real_size'] = [self.col_widths[data_index], self.real_size[1]]
+		additional_data['real_size'] = real_size
 		return additional_data
 
 	def additionalKwargsFillFirst(self, data_index, reference_child):
+		real_size = self._add_real_size_for_kwargs(data_index)
+
 		additional_data = super(RowLayout, self).additionalKwargsFillFirst(data_index, reference_child)
 
 		data_index = self.get_data_index(data_index)
-		additional_data['real_size'] = [self.col_widths[data_index], self.real_size[1]]
+		additional_data['real_size'] = real_size
 		return additional_data
 
 	def additionalKwargsFillLast(self, data_index, reference_child):
+		real_size = self._add_real_size_for_kwargs(data_index)
+
 		additional_data = super(RowLayout, self).additionalKwargsFillLast(data_index, reference_child)
 
 		data_index = self.get_data_index(data_index)
-		additional_data['real_size'] = [self.col_widths[data_index], self.real_size[1]]
+		additional_data['real_size'] = real_size
 		return additional_data
 
 	def insertNewAndReposition(self, data_index, new_data, child_type: ChildWidget):
@@ -701,21 +775,30 @@ class RowLayout(NestedHorizontalLayout):
 			if tmp_height == self.real_size[1]:
 				self.recalculate_max_child_height()
 
-	def updateColWidths(self, col_index, col_width):
+	def updateColWidth(self, col_index, col_width, override_content_size=False):
 		col_index = self.get_data_index(col_index)
 		delta = col_width - self.col_widths[col_index]
 		self.col_widths[col_index] = col_width
 		cell = self.visible[self.get_visible_index(col_index)]
+		cell.override_content_size = override_content_size
 		cell.updateSize([col_width, self.real_size[1]])
-		self.repositionChildren(cell, delta=delta)
+		self.repositionChildren(cell, delta=[delta, 0])
 
-	def updateHeight(self, height):
+	def updateHeight(self, height, override_content_size=False):
 		delta = self.real_size[1] - height
-		if delta > 0:
-			for child in self.visible:
-				child.updateSize([child.real_size[0], height])
-			self.updateSize([self.real_size[0], height])
-			self.updatePos([0, delta])
+		for child in self.visible:
+			child.override_content_size = override_content_size
+			child.updateSize([child.real_size[0], height])
+		self.updateSize([self.real_size[0], height])
+		self.updatePos([0, delta])
+
+	def updateColWidths(self, col_widths, override_content_size=False):
+		for i in range(len(self.visible)):
+			cell = self.visible[i]
+			data_index = self.get_visible_index(cell.data_index)
+			self.updateColWidth(data_index, col_widths[data_index], override_content_size=override_content_size)
+		self.col_widths = deepcopy(col_widths)
+		self.updateSize([sum(self.col_widths), self.real_size[1]])
 
 
 class GridLayout(NestedVerticalLayout):
@@ -727,8 +810,8 @@ class GridLayout(NestedVerticalLayout):
 	row_heights: List = []
 	def __init__(self, *args, col_widths=[], row_heights=[], **kwargs):
 		super(GridLayout, self).__init__(*args, **kwargs)
-		self.col_widths = col_widths
-		self.row_heights = row_heights
+		self.col_widths = deepcopy(col_widths)
+		self.row_heights = deepcopy(row_heights)
 		if not self.data:
 			self.data = [{} for i in range(len(self.row_heights))]
 
@@ -778,22 +861,54 @@ class GridLayout(NestedVerticalLayout):
 			self.repositionChildren(row, delta=delta)
 			self.row_heights[data_row_index] = row.real_size[1]
 
+	def _add_real_size_for_kwargs(self, data_index):
+		"""
+		NOTE: This method is ONLY for internal purpose. Do NOT use this method at any time!
+
+		Due to the internal logic that 'real_size' needs to be set from the very start for all additionalKwargs* methods
+		and the implementation choice to set the real size on instantiation level from grid to row and from row to cell,
+		we need to do so before calling the additionalKwargs* super methods. Since this is the same for all of them, we
+		extracted this logic to this separate method.
+		"""
+		real_size = [sum(self.col_widths), self.row_heights[data_index]]
+
+		data_index = self.get_data_index(data_index)
+		raw_data = self.data[data_index]
+		raw_data['init_data']['real_size'] = real_size
+
+		return real_size
+
 	def additionalKwargsInsert(self, data_index):
+		real_size = self._add_real_size_for_kwargs(data_index)
+
 		additional_data = super(GridLayout, self).additionalKwargsInsert(data_index)
 		additional_data['col_widths'] = self.col_widths
+
+		data_index = self.get_data_index(data_index)
+		additional_data['real_size'] = real_size
 		return additional_data
 
 	def addWidget(self, data_index, additional_data):
 		super(GridLayout, self).addWidget(data_index, additional_data)
 
 	def additionalKwargsFillFirst(self, data_index, reference_child):
+		real_size = self._add_real_size_for_kwargs(data_index)
+
 		additional_data = super(GridLayout, self).additionalKwargsFillFirst(data_index, reference_child)
 		additional_data['col_widths'] = self.col_widths
+
+		data_index = self.get_data_index(data_index)
+		additional_data['real_size'] = real_size
 		return additional_data
 
 	def additionalKwargsFillLast(self, data_index, reference_child):
+		real_size = self._add_real_size_for_kwargs(data_index)
+
 		additional_data = super(GridLayout, self).additionalKwargsFillLast(data_index, reference_child)
 		additional_data['col_widths'] = self.col_widths
+
+		data_index = self.get_data_index(data_index)
+		additional_data['real_size'] = real_size
 		return additional_data
 
 	def insertCellAndReposition(self, data_index, new_data, child_type: CellWrapper):
@@ -813,7 +928,7 @@ class GridLayout(NestedVerticalLayout):
 		data_row_index = self.get_data_index(data_index[0])
 		if row.real_size[1] > self.row_heights[data_row_index]:
 			delta = self.row_heights[data_row_index] - row.real_size[1]
-			self.repositionChildren(row, delta=delta)
+			self.repositionChildren(row, delta=[0, delta])
 			self.row_heights[data_row_index] = row.real_size[1]
 
 		# get col_index and col_width
@@ -828,13 +943,36 @@ class GridLayout(NestedVerticalLayout):
 
 			# TODO: reposition will get called twice by that. If there is performance issues, this needs to be changed.
 			child.insertNewAndReposition(col_index, {}, child_type)
-			child.updateColWidths(col_index, col_width)
+			child.updateColWidth(col_index, col_width)
 
 	def updateCell(self, data_index, update_data):
 		visible_index = self.get_visible_cell_index(data_index)
 		row_index, col_index = visible_index
 		row = self.visible[row_index]
 		row.updateCell(data_index, update_data)
+
+	def updateColWidths(self, col_widths, override_content_size=False):
+		"""
+		We dont want to update real_size, since this serves as the frame of the grid and should not get fit to its
+		visible content.
+		"""
+		for row in self.visible:
+			row.updateColWidths(col_widths, override_content_size=override_content_size)
+		self.col_widths = deepcopy(col_widths)
+		self.calculate_max_child_width()
+
+	def updateRowHeights(self, row_heights, override_content_size=False):
+		"""
+		We dont want to update real_size, since this serves as the frame of the grid and should not get fit to its
+		visible content.
+		"""
+		for i in range(len(self.visible)):
+			row = self.visible[i]
+			data_index = self.get_data_index(row.data_index)
+			delta = self.row_heights[data_index] - row_heights[data_index]
+			row.updateHeight(row_heights[data_index], override_content_size=override_content_size)
+			self.repositionChildren(row, delta=[0, delta])
+		self.row_heights = deepcopy(row_heights)
 
 
 
